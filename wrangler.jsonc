@@ -1,0 +1,38 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "slopcash-bridge",
+  "account_id": "f6aff821e92502a4c148dfdcbc082a14",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    // delta-git forge base URL (public JSON API, no auth for reads).
+    "FORGE_BASE": "https://code.widespread.fyi",
+    // Repos the cron scanner watches for unreviewed `ship` op-log entries.
+    "WATCH_REPOS": "slop/slopdotcash,slop/protocol",
+    // PayPal REST base — sandbox by default, flip to api-m.paypal.com for live.
+    "PAYPAL_API_BASE": "https://api-m.sandbox.paypal.com",
+    // Workers AI model for the adjudicator seat.
+    "LLM_MODEL": "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
+    // Minimum adjudicator confidence (0..1) required to release a payout.
+    "MIN_CONFIDENCE": "0.6",
+    // Public base URL of this deployment — used for receipt target_urls
+    // written back to the forge. Set after first deploy.
+    "PUBLIC_BASE": "https://slopcash-bridge.hardwoodstablecoin.workers.dev"
+  },
+  "kv_namespaces": [
+    {
+      "binding": "CLAIMS",
+      "id": "f939a2560ae24c69bf5f0859531ec3dd"
+    }
+  ],
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  // The scheduled() handler scans watched op-logs when a cron slot exists.
+  // Free tier allows 5 cron triggers/account — this account is full, so the
+  // dashboard's /api/state polling drives the same opportunistic scan.
+  // Uncomment when a slot is free:
+  // "triggers": { "crons": ["*/5 * * * *"] }
+}
