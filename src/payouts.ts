@@ -107,12 +107,7 @@ export async function sendPayout(env: Env, req: PayoutRequest): Promise<PayoutRe
 
     // Read the batch back — item rows carry the PayPal transaction id.
     if (receipt.batch_id) {
-      const batch = (await fetch(
-        `${env.PAYPAL_API_BASE}/v1/payments/payouts/${receipt.batch_id}`,
-        { headers: { authorization: `Bearer ${token}` } }
-      )
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null)) as PayoutBatchResponse | null;
+      const batch = await readBatch(env, token, receipt.batch_id);
       if (batch) {
         receipt.batch_status = batch.batch_header?.batch_status ?? receipt.batch_status;
         const item = batch.items?.[0];
@@ -120,6 +115,44 @@ export async function sendPayout(env: Env, req: PayoutRequest): Promise<PayoutRe
         receipt.transaction_status = item?.transaction_status;
       }
     }
+    return receipt;
+  } catch (e) {
+    receipt.error = String(e);
+    return receipt;
+  }
+}
+
+async function readBatch(
+  env: Env,
+  token: string,
+  batchId: string
+): Promise<PayoutBatchResponse | null> {
+  return (await fetch(`${env.PAYPAL_API_BASE}/v1/payments/payouts/${batchId}`, {
+    headers: { authorization: `Bearer ${token}` },
+  })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)) as PayoutBatchResponse | null;
+}
+
+/**
+ * Refresh an already-created batch instead of re-POSTing: re-reviews never
+ * create a second payout, they just re-read settlement state.
+ */
+export async function refreshBatch(env: Env, prior: PayoutReceipt): Promise<PayoutReceipt> {
+  const receipt: PayoutReceipt = { ...prior };
+  if (!prior.batch_id) return receipt;
+  try {
+    const token = await accessToken(env);
+    const batch = await readBatch(env, token, prior.batch_id);
+    if (!batch) {
+      receipt.error = `batch readback failed`;
+      return receipt;
+    }
+    receipt.batch_status = batch.batch_header?.batch_status ?? prior.batch_status;
+    const item = batch.items?.[0];
+    receipt.transaction_id = item?.transaction_id ?? prior.transaction_id;
+    receipt.transaction_status = item?.transaction_status ?? prior.transaction_status;
+    delete receipt.error;
     return receipt;
   } catch (e) {
     receipt.error = String(e);

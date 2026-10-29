@@ -3,7 +3,7 @@
 import { adjudicate } from "./adjudicator";
 import { crosscheck, gatherCommitEvidence } from "./evidence";
 import { fetchOpLog, verifyChain } from "./oplog";
-import { sendPayout } from "./payouts";
+import { refreshBatch, sendPayout } from "./payouts";
 import { getBounty, getRecord, putRecord } from "./store";
 import { writebackReceipt } from "./writeback";
 import type {
@@ -36,6 +36,11 @@ export async function runReview(
     const existing = await getRecord(env, repo, seq);
     if (existing) return existing;
   }
+
+  // A forced re-review refreshes the prior batch's settlement state rather
+  // than re-POSTing — PayPal rejects a second send under the same
+  // sender_batch_id, and one claim = one payout regardless.
+  const prior = opts.force ? await getRecord(env, repo, seq) : null;
 
   const entries = await fetchOpLog(env.FORGE_BASE, repo);
   const entry = entries.find((e) => e.seq === seq);
@@ -82,6 +87,8 @@ export async function runReview(
         skipped_reason: "no recipient — seed a bounty for this repo or set claim.paypal_email",
         sandbox: true,
       };
+    } else if (prior?.payout?.batch_id) {
+      payout = await refreshBatch(env, prior.payout);
     } else {
       payout = await sendPayout(env, {
         repo,
