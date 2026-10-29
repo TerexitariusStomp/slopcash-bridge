@@ -7,6 +7,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Slop.cash · verified-work payouts</title>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33/dist/ag-grid-community.min.js"></script>
 <style>
   :root { --pp-dark:#003087; --pp-blue:#0070e0; --bg:#0d1117; --card:#161b22;
     --border:#30363d; --fg:#e6edf3; --mut:#8b949e; --ok:#2ea043; --bad:#f85149; }
@@ -55,6 +56,16 @@ export const DASHBOARD_HTML = `<!doctype html>
   .conf { height:6px; border-radius:3px; background:var(--border); overflow:hidden;
     margin-top:6px; }
   .conf i { display:block; height:100%; background:var(--pp-blue); }
+  .grid { height:220px; margin-bottom:14px; }
+  /* AG Grid dark theme tokens */
+  .ag-theme-quartz-dark, .ag-theme-quartz {
+    --ag-background-color: var(--card);
+    --ag-header-background-color: #0d1117;
+    --ag-foreground-color: var(--fg);
+    --ag-border-color: var(--border);
+    --ag-row-hover-color: #1c2128;
+    --ag-font-size: 12px;
+  }
 </style>
 </head>
 <body>
@@ -62,6 +73,7 @@ export const DASHBOARD_HTML = `<!doctype html>
   <h1>Slop.cash <span class="mut">verified-work payouts</span></h1>
   <span class="paypal">PayPal Payouts</span>
   <span class="ai">AI adjudicator</span>
+  <span class="ai">AG Grid</span>
   <span class="mut" id="stamp"></span>
 </header>
 <main>
@@ -72,7 +84,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 
   <h2>Run a review</h2>
   <form onsubmit="return runReview(event)">
-    <input id="f-repo" placeholder="owner/repo" value="slop/protocol" size="22">
+    <input id="f-repo" placeholder="owner/repo" value="slop/slopdotcash" size="22">
     <input id="f-seq" placeholder="op-log seq" size="8">
     <button type="submit">Review claim</button>
     <button type="button" class="sec" onclick="return runReview(event,true)">Review all outstanding</button>
@@ -80,9 +92,10 @@ export const DASHBOARD_HTML = `<!doctype html>
   </form>
 
   <h2>Open bounties</h2>
-  <div id="bounties" class="mut">loading…</div>
+  <div id="bounties-grid" class="grid"></div>
 
   <h2>Claim → payout receipts</h2>
+  <div id="claims-grid" class="grid"></div>
   <div id="claims" class="mut">loading…</div>
 </main>
 <script>
@@ -137,6 +150,73 @@ crosscheck files \${r.crosscheck.recomputed_files} vs claimed \${r.crosscheck.cl
   </div>\`;
 }
 
+// AG Grid (hackathon sponsor tech) — sortable/filterable tables feeding the
+// claim detail cards below. themeQuartz dark via the Theming API.
+const gridTheme = (window.agGrid && agGrid.themeQuartz && agGrid.colorSchemeDark)
+  ? agGrid.themeQuartz.withPart(agGrid.colorSchemeDark)
+  : undefined;
+const gridBase = {
+  theme: gridTheme,
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+};
+let claimsGrid = null;
+let bountiesGrid = null;
+
+function renderBounties(bs) {
+  const rows = (bs || []).map(b => ({
+    repo: b.repo, bounty: b.amount + " " + b.currency,
+    recipient: b.receiver_email, spec: b.spec || "",
+  }));
+  if (!bountiesGrid) {
+    bountiesGrid = agGrid.createGrid($("#bounties-grid"), {
+      ...gridBase,
+      columnDefs: [
+        { field: "repo", width: 170 },
+        { field: "bounty", width: 100 },
+        { field: "recipient", flex: 1 },
+        { field: "spec", flex: 2 },
+      ],
+      rowData: rows,
+    });
+  } else {
+    bountiesGrid.setGridOption("rowData", rows);
+  }
+}
+
+function renderClaimsGrid(claims) {
+  const rows = (claims || []).map(r => ({
+    repo: r.repo, seq: r.seq,
+    verdict: r.adjudication ? r.adjudication.verdict : "—",
+    confidence: r.adjudication ? r.adjudication.confidence : null,
+    payout: r.payout && r.payout.batch_id ? r.payout.batch_id : "—",
+    txn: r.payout && r.payout.transaction_id ? r.payout.transaction_id : "—",
+    status: r.status, id: r.id,
+  }));
+  const colDefs = [
+    { field: "repo", width: 150 },
+    { field: "seq", width: 70, headerName: "op #" },
+    { field: "verdict", width: 90 },
+    { field: "confidence", width: 100, valueFormatter: p =>
+        p.value == null ? "—" : (p.value * 100).toFixed(0) + "%" },
+    { field: "payout", flex: 1, headerName: "PayPal batch" },
+    { field: "txn", flex: 1, headerName: "transaction id" },
+    { field: "status", width: 140 },
+  ];
+  if (!claimsGrid) {
+    claimsGrid = agGrid.createGrid($("#claims-grid"), {
+      ...gridBase,
+      columnDefs: colDefs,
+      rowData: rows,
+      onRowClicked: (e) => {
+        const el = document.getElementById("claim-" + e.data.id);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      },
+    });
+  } else {
+    claimsGrid.setGridOption("rowData", rows);
+  }
+}
+
 async function refresh() {
   try {
     const res = await fetch("/api/state");
@@ -145,11 +225,8 @@ async function refresh() {
     const claims = (s.claims || []).slice().reverse();
     $("#claims").innerHTML = claims.length
       ? claims.map(claimCard).join("") : "no claims reviewed yet";
-    const bs = s.bounties || [];
-    $("#bounties").innerHTML = bs.length ? "<table><tr><th>repo</th><th>bounty</th><th>recipient</th><th>spec</th></tr>" +
-      bs.map(b => \`<tr><td class="mono">\${esc(b.repo)}</td><td>\${esc(b.amount)} \${esc(b.currency)}</td>
-        <td class="mono">\${esc(b.receiver_email)}</td><td>\${esc(b.spec||"")}</td></tr>\`).join("") +
-      "</table>" : "no funded bounties — POST /api/bounties to open one";
+    renderClaimsGrid(claims);
+    renderBounties(s.bounties);
     if (location.hash.startsWith("#/claim/")) {
       const el = document.getElementById("claim-" + location.hash.slice(8));
       if (el) el.scrollIntoView();

@@ -30,21 +30,21 @@ receipt written back to the forge as a signed commit status (slopcash/payout)
    GitHub upstream's `.patch` endpoint):
 
    ```bash
-   node scripts/ship-claim.mjs --repo slop/protocol \
-     --commits ec8f99d477e2c7846b8a33c234ca9451ee464866
+   node scripts/ship-claim.mjs --repo slop/slopdotcash \
+     --commits 99cc25d469c2ededff0b67d99f08dd4375cf4208
    ```
 
    → see `{"verified":true,"ship":true,"op_seq":N}` and the entry in
-   https://code.widespread.fyi/api/slop/protocol/dg/oplog
+   https://code.widespread.fyi/api/slop/slopdotcash/dg/oplog
 
 2. **Open a bounty** (PayPal sandbox recipient email):
 
    ```bash
    node scripts/seed-bounty.mjs \
      --bridge https://slopcash-bridge.hardwoodstablecoin.workers.dev \
-     --repo slop/protocol --email sb-you@personal.example.com \
+     --repo slop/slopdotcash --email sb-you@personal.example.com \
      --amount 25.00 --currency USD \
-     --spec "block v4-pool swaps while the venture token is paused"
+     --spec "keeper's signed award payment lands after its binding commit"
    ```
 
    → see it under "Open bounties" on the dashboard.
@@ -54,7 +54,7 @@ receipt written back to the forge as a signed commit status (slopcash/payout)
    ```bash
    curl -X POST https://slopcash-bridge.hardwoodstablecoin.workers.dev/review \
      -H 'content-type: application/json' \
-     -d '{"repo":"slop/protocol","seq":N}'
+     -d '{"repo":"slop/slopdotcash","seq":N}'
    ```
 
    → see the evidence JSON: hash-chain replay, recomputed per-commit diffs,
@@ -64,13 +64,15 @@ receipt written back to the forge as a signed commit status (slopcash/payout)
 4. **Watch it live** on the dashboard — open the demo URL; a pending claim
    card fills in left-to-right: claim → evidence → AI verdict → PayPal
    receipt. The dashboard's own polling also drives claim pickup, so a new
-   ship lands as a card without anyone calling `/review`.
+   ship lands as a card without anyone calling `/review`. The claim and
+   bounty tables are **AG Grid** (sortable/filterable; click a row to jump
+   to its card) — the Postman collection in `postman/` replays every call.
 
 5. **Check the audit trail** — the payout receipt is written back to the
    forge as a commit status:
 
    ```
-   GET https://code.widespread.fyi/api/slop/protocol/dg/status/<commit-sha>
+   GET https://code.widespread.fyi/api/slop/slopdotcash/dg/status/<commit-sha>
    ```
 
    → `context: "slopcash/payout"` with the PayPal batch id and a link back to
@@ -132,6 +134,10 @@ dashboard's `/api/state` polling does it opportunistically.
   attestations in a hash-chained op-log, public commit-diff endpoints, and
   signed `did:key` agent envelopes for the receipt write-back.
 - **Cloudflare Workers + KV** — the whole service.
+- **AG Grid Community** — the dashboard's sortable/filterable claims and
+  bounties tables.
+- **Postman** — `postman/slopcash-bridge.postman_collection.json` replays the
+  full demo (op-log read → bounty → review → receipt write-back).
 
 ## Stretch lanes
 
