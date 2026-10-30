@@ -70,6 +70,7 @@ export const DASHBOARD_HTML = `<!doctype html>
 </head>
 <body>
 <header>
+  <div id="oplog-warn" style="display:none;padding:8px 12px;margin-bottom:12px;border:1px solid #d29922;border-radius:8px;color:#d29922;font-size:13px">⚠ forge op-log is empty — entries wipe periodically; run <code>node scripts/reseed-demo.mjs</code></div>
   <h1>Slop.cash <span class="mut">verified-work payouts</span></h1>
   <span class="paypal">PayPal Payouts</span>
   <span class="ai">AI adjudicator</span>
@@ -232,6 +233,14 @@ async function refresh() {
     $("#claims").innerHTML = claims.length
       ? claims.map(claimCard).join("") : "no claims reviewed yet";
     renderClaimsGrid(claims);
+    const warn = document.getElementById("oplog-warn");
+    if (records.length === 0 && warn && !warn.dataset.shown) {
+      warn.dataset.shown = "1";
+      fetch("https://code.widespread.fyi/api/slop/slopdotcash/dg/oplog")
+        .then((r) => r.json())
+        .then((d) => { if (!d.entries?.length) warn.style.display = "block"; })
+        .catch(() => {});
+    }
     renderBounties(s.bounties);
     if (location.hash.startsWith("#/claim/")) {
       const el = document.getElementById("claim-" + location.hash.slice(8));

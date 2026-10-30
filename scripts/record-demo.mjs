@@ -14,7 +14,7 @@ const BRIDGE = "https://slopcash-bridge.hardwoodstablecoin.workers.dev";
 const FORGE = "https://code.widespread.fyi";
 const REPO = "slop/slopdotcash";
 const SHA = "a0cc9de43d530b6b4d3884a5910074e4eee02e84";
-const DIR = "/home/terex/Documents/cloud-sessions/review-vibetime-club-commit-response-6297090d/slopcash-bridge";
+const DIR = "/home/terex/Documents/slopcash-bridge";
 const TERM = `file://${DIR}/video/term.html`;
 const TITLE = `file://${DIR}/video/title.html`;
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
