@@ -32,22 +32,23 @@ export async function runReview(
   opts: { force?: boolean } = {}
 ): Promise<ReviewRecord> {
   const id = `${repo}:${seq}`;
-  if (!opts.force) {
-    const existing = await getRecord(env, repo, seq);
-    if (existing) return existing;
-  }
-
-  // A forced re-review refreshes the prior batch's settlement state rather
-  // than re-POSTing — PayPal rejects a second send under the same
-  // sender_batch_id, and one claim = one payout regardless.
-  const prior = opts.force ? await getRecord(env, repo, seq) : null;
-
   const entries = await fetchOpLog(env.FORGE_BASE, repo);
   const entry = entries.find((e) => e.seq === seq);
   if (!entry) throw new Error(`no op-log entry seq=${seq} in ${repo}`);
   if (entry.kind !== "ship" || entry.payload?.ship !== true) {
     throw new Error(`entry ${seq} is not an accepted ship claim (kind=${entry.kind})`);
   }
+
+  // delta-git op-logs are reset periodically — a wiped repo restarts at
+  // genesis and reuses seq numbers. Only a stored record for THIS exact
+  // entry (same hash) counts as already-reviewed; a same-seq entry under a
+  // different hash is a new claim and earns a fresh review + payout.
+  const stored = await getRecord(env, repo, seq);
+  if (stored && !opts.force && stored.claim.hash === entry.hash) return stored;
+  // Same-claim prior → refresh its batch rather than re-POST (PayPal rejects
+  // a second send under the same sender_batch_id). Different-hash prior →
+  // a new claim; its payout gets a hash-keyed batch id.
+  const prior = stored?.claim.hash === entry.hash ? stored : null;
 
   const claim = entry.payload as unknown as ShipClaim;
   const [chain, bounty] = await Promise.all([verifyChain(entries), getBounty(env, repo)]);
@@ -93,6 +94,7 @@ export async function runReview(
       payout = await sendPayout(env, {
         repo,
         seq,
+        claimHash: entry.hash,
         receiver,
         amount: bounty?.amount ?? "1.00",
         currency: bounty?.currency ?? "USD",
@@ -150,7 +152,8 @@ export async function reviewOutstanding(
   const shipEntries = entries.filter((e) => e.kind === "ship" && e.payload?.ship === true);
   const out: ReviewRecord[] = [];
   for (const entry of shipEntries.slice(-limit)) {
-    if (await getRecord(env, repo, entry.seq)) continue;
+    const stored = await getRecord(env, repo, entry.seq);
+    if (stored && stored.claim.hash === entry.hash) continue;
     out.push(await runReview(env, repo, entry.seq));
   }
   return out;

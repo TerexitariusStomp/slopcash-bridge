@@ -29,6 +29,7 @@ async function accessToken(env: Env): Promise<string> {
 export interface PayoutRequest {
   repo: string;
   seq: number;
+  claimHash: string;
   receiver: string;
   amount: string;
   currency: string;
@@ -53,7 +54,9 @@ function isSandbox(env: Env): boolean {
 /**
  * POST /v1/payments/payouts then read the batch back for the transaction
  * id — the receipt the dashboard displays. sender_batch_id is deterministic
- * (repo+seq) so a retried review can't double-pay: PayPal dedupes on it.
+ * per claim (repo+seq+entry hash) so a retried review can't double-pay —
+ * PayPal dedupes on it — while a post-reset claim at the same seq still
+ * earns its own payout (different hash → different batch id).
  */
 export async function sendPayout(env: Env, req: PayoutRequest): Promise<PayoutReceipt> {
   const receipt: PayoutReceipt = {
@@ -65,7 +68,7 @@ export async function sendPayout(env: Env, req: PayoutRequest): Promise<PayoutRe
   };
   try {
     const token = await accessToken(env);
-    const senderBatchId = `slopcash-${req.repo.replace("/", "-")}-${req.seq}`;
+    const senderBatchId = `slopcash-${req.repo.replace("/", "-")}-${req.seq}-${req.claimHash.slice(0, 8)}`;
     receipt.sender_batch_id = senderBatchId;
     const res = await fetch(`${env.PAYPAL_API_BASE}/v1/payments/payouts`, {
       method: "POST",
