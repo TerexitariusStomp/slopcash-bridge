@@ -11,6 +11,7 @@
 //   scheduled(*/5m)           scan WATCH_REPOS op-logs, review new ship claims
 
 import { DASHBOARD_HTML } from "./dash";
+import { handlePremiumExport } from "./premium";
 import { reviewOutstanding, runReview } from "./review";
 import { deleteBounty, listBounties, listRecords, putBounty } from "./store";
 import type { Bounty, Env } from "./types";
@@ -132,6 +133,9 @@ export default {
     }
     if (pathname === "/api/scan" && req.method === "POST") {
       return json({ reviewed: await scan(env) });
+    }
+    if (pathname === "/api/premium/oplog-export" && req.method === "GET") {
+      return handlePremiumExport(req, env);
     }
     if (pathname === "/review" && (req.method === "POST" || req.method === "GET")) {
       return handleReview(req, env);

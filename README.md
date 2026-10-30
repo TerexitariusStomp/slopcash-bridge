@@ -158,3 +158,17 @@ dashboard's `/api/state` polling does it opportunistically.
    `SUCCESS` — then open the PayPal sandbox dashboard showing the same batch.
 5. `GET .../dg/status/<sha>` — the receipt written back to the forge.
 6. (Contrast) a junk claim → `REJECT` with the model's reasoning, no payout.
+
+## Reverse lane: agent pays via PayPal (x402-style, shipped)
+
+Agents settle HTTP-402 paywalls with **PayPal Orders** — not crypto:
+
+```bash
+curl -i "https://slopcash-bridge.hardwoodstablecoin.workers.dev/api/premium/oplog-export?repo=slop/slopdotcash"
+# → 402 + {invoice: $0.01 USD → sb-hp8xg48048392@business.example.com}
+# Pay (sandbox order), then retry with ?order=<ORDER_ID> → signed /dg/export bundle
+```
+
+The bridge verifies the order against `GET /v2/checkout/orders/{id}` before
+serving. Same PayPal app credentials as the payout lane — both directions
+settle through PayPal.
