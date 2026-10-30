@@ -91,7 +91,7 @@ export const DASHBOARD_HTML = `<!doctype html>
     <span class="mut" id="run-out"></span>
   </form>
 
-  <h2>Open bounties</h2>
+  <h2>Open bounties <input id="qfilter" placeholder="filter…" style="float:right;width:160px;padding:4px 8px" oninput="onFilter(this.value)"></h2>
   <div id="bounties-grid" class="grid"></div>
 
   <h2>Claim → payout receipts</h2>
@@ -192,15 +192,21 @@ function renderClaimsGrid(claims) {
     txn: r.payout && r.payout.transaction_id ? r.payout.transaction_id : "—",
     status: r.status, id: r.id,
   }));
+  const statusColor = (v) => v === "accept" || v === "accepted_paid" ? "#2ea043"
+    : v === "rejected" || v === "reject" ? "#f85149" : "#8b949e";
   const colDefs = [
     { field: "repo", width: 150 },
     { field: "seq", width: 70, headerName: "op #" },
-    { field: "verdict", width: 90 },
+    { field: "verdict", width: 90,
+      cellStyle: p => ({ color: statusColor(p.value), fontWeight: 700 }) },
     { field: "confidence", width: 100, valueFormatter: p =>
-        p.value == null ? "—" : (p.value * 100).toFixed(0) + "%" },
+        p.value == null ? "—" : (p.value * 100).toFixed(0) + "%",
+      cellStyle: p => ({ color: p.value >= 0.6 ? "#2ea043" : "#f85149" }) },
     { field: "payout", flex: 1, headerName: "PayPal batch" },
-    { field: "txn", flex: 1, headerName: "transaction id" },
-    { field: "status", width: 140 },
+    { field: "txn", flex: 1, headerName: "transaction id",
+      cellStyle: { fontFamily: "ui-monospace,monospace", color: "#0070e0" } },
+    { field: "status", width: 140,
+      cellStyle: p => ({ color: statusColor(p.value), fontWeight: 700 }) },
   ];
   if (!claimsGrid) {
     claimsGrid = agGrid.createGrid($("#claims-grid"), {
@@ -248,6 +254,11 @@ async function runReview(ev, outstanding) {
     : " error: " + (j.error || res.status);
   refresh();
   return false;
+}
+
+function onFilter(v) {
+  claimsGrid?.setGridOption("quickFilterText", v);
+  bountiesGrid?.setGridOption("quickFilterText", v);
 }
 
 refresh(); setInterval(refresh, 8000);
