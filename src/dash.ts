@@ -120,6 +120,8 @@ function claimCard(r) {
   const chainOk = r.chain && r.chain.valid;
   const commits = (r.commits||[]).map(c =>
     \`  \${c.sha.slice(0,10)}  +\${c.lines_added}/-\${c.lines_removed}  \${(c.files||[]).length} files  [\${c.source}]\`).join("\\n");
+  const firstSha = (p.commits||[])[0]||"";
+  const firstSha = (p.commits||[])[0]||"";
   const payLine = pay.attempted
     ? \`batch \${pay.batch_id}\\ntxn   \${pay.transaction_id || "—"} (\${pay.transaction_status || pay.batch_status || "?"})\\n→ \${pay.receiver}  \${pay.amount} \${pay.currency}  [\${pay.sandbox ? "sandbox" : "LIVE"}]\`
     : \`not sent — \${pay.skipped_reason || "rejected"}\${pay.error ? "\\n" + pay.error : ""}\`;
@@ -147,6 +149,11 @@ crosscheck files \${r.crosscheck.recomputed_files} vs claimed \${r.crosscheck.cl
       <div class="step"><h3>4 · PayPal payout</h3>
         \${pay.batch_id ? badge("PayPal","b-pp") : ""}
         <pre>\${esc(payLine)}</pre></div>
+    </div>
+    <div class="links" style="margin-top:8px;font-size:12px">
+      \${'<a href="https://code.widespread.fyi/api/'+r.repo+'/dg/oplog" target="_blank" rel="noopener">op-log ↗</a>'}
+      \${firstSha ? '<a href="https://code.widespread.fyi/api/'+r.repo+'/dg/status/'+firstSha+'" target="_blank" rel="noopener">forge receipt ↗</a>' : ""}
+      \${pay.batch_id ? '<a href="https://api-m.sandbox.paypal.com/v1/payments/payouts/'+pay.batch_id+'" target="_blank" rel="noopener">paypal batch ↗</a>' : ""}
     </div>
   </div>\`;
 }
